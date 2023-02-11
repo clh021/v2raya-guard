@@ -5,6 +5,7 @@
 FROM golang:1.19-alpine as builder
 WORKDIR /app
 COPY . .
+RUN apk add g++ && apk add make
 RUN make build
 
 # -- Stage 2 -- #
