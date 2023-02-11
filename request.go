@@ -7,9 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"sort"
 	"strings"
-	"time"
 )
 
 const (
@@ -23,14 +21,51 @@ var (
 	password      string
 )
 
+// postJson
+func postJson(action string, body map[string]interface{}) (*Response, error) {
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	return request(action, "post", bytes.NewReader(buf))
+}
+
+// 登陆
+// 一般用于在执行某个接口请求时发现未登陆或登陆过期时自动完成认证
+func login() error {
+	response, err := postJson(ActionLogin, map[string]interface{}{
+		"username": username,
+		"password": password,
+	})
+	if err != nil {
+		return err
+	}
+	if response.isFailed() {
+		panic(fmt.Errorf("login failed. response is:%v", response))
+	}
+	token, ok := response.Data["token"]
+	if ok {
+		authorization = strings.TrimSpace(fmt.Sprintf("%s", token))
+		log.Printf("login success! Get Authorization:%s \n", authorization)
+		return nil
+	}
+	return fmt.Errorf("login failed. response is:%v", response)
+}
+
+// 发送请求的封装
+// action: 具体路径
+// method: 请求方式:GET|POST|PUT 等
+// body:   请求发送的数据
 func request(action, method string, body io.Reader) (*Response, error) {
 	url := serverBase + action
-	req, err := http.NewRequest(strings.ToUpper(method), url, body)
+	method = strings.ToUpper(method)
+	log.Printf("[%s]%s", method, url)
+	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json;charset=utf-8")
-	if strings.TrimSpace(authorization) != "" {
+	if authorization != "" {
 		req.Header.Set("Authorization", authorization)
 	}
 	res, err := http.DefaultClient.Do(req)
@@ -38,6 +73,7 @@ func request(action, method string, body io.Reader) (*Response, error) {
 		return nil, err
 	}
 	if res.StatusCode == 401 {
+		log.Println("服务器提示未授权的请求,将自动登陆获得新的授权码")
 		login()
 		return request(action, method, body)
 	}
@@ -54,126 +90,10 @@ func request(action, method string, body io.Reader) (*Response, error) {
 	return response, err
 }
 
-func login() error {
-	response, err := postJson(ActionLogin, map[string]interface{}{
-		"username": username,
-		"password": password,
-	})
-	if err != nil {
-		return err
-	}
-	if response.isFailed() {
-		panic(fmt.Errorf("login failed. response is:%v", response))
-	}
-	token, ok := response.Data["token"]
-	if ok {
-		authorization = fmt.Sprintf("%s", token)
-		log.Println("login success")
-		return nil
-	}
-	return fmt.Errorf("login failed. response is:%v", response)
-}
-func postJson(action string, body map[string]interface{}) (*Response, error) {
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	return request(action, "post", bytes.NewReader(buf))
-}
-
-func restart() {
-	res, err := request("touch", "GET", nil)
-	if err != nil {
-		return
-	}
-	log.Println("get server list success")
-	touch, _ := res.Data["touch"].(map[string]interface{})
-	params := make([]map[string]interface{}, 0)
-	serverList, _ := touch["servers"].([]interface{})
-	for _, s := range serverList {
-		params = append(params, map[string]interface{}{
-			"id":    s.(map[string]interface{})["id"],
-			"_type": "server",
-		})
-	}
-	subscriptions, _ := touch["subscriptions"].([]interface{})
-	for index, sub := range subscriptions {
-		for _, s := range sub.(map[string]interface{})["servers"].([]interface{}) {
-			params = append(params, map[string]interface{}{
-				"id":    s.(map[string]interface{})["id"],
-				"_type": "subscriptionServer",
-				"sub":   index,
-			})
-		}
-	}
-	if len(params) == 0 {
-		return
-	}
-	res, err = request("v2ray", "delete", nil)
-	if err != nil || res.isFailed() {
-		log.Printf("stop v2ray failed.%s\n", res.Data)
-	} else {
-		log.Println("stop v2ray success")
-	}
-	paramStr, _ := json.Marshal(params)
-	action := "httpLatency?whiches=" + string(paramStr)
-	res, err = request(action, "get", nil)
-	if err != nil || res.isFailed() {
-		log.Printf("ping servers failed.%s\n", res.Data)
-	} else {
-		log.Println("ping servers success")
-	}
-	whiches := res.Data["whiches"].([]interface{})
-	pings := make(servers, 0)
-	for _, which := range whiches {
-		d := which.(map[string]interface{})
-		p, e := time.ParseDuration(d["pingLatency"].(string))
-		if e != nil {
-			continue
-		}
-		pings = append(pings, &server{
-			id:          int(d["id"].(float64)),
-			_type:       d["_type"].(string),
-			sub:         int(d["sub"].(float64)),
-			pingLatency: p,
-		})
-	}
-	sort.Sort(pings)
-	connectedServers := touch["connectedServer"].([]interface{})
-	for _, cs := range connectedServers {
-		m := cs.(map[string]interface{})
-		param := fmt.Sprintf(`{"id":%v,"_type":"%v","sub":%v,"outbound":"proxy"}`, m["id"], m["_type"], m["sub"])
-		res, err = request("connection", "delete", strings.NewReader(param))
-		if err != nil || res.isFailed() {
-			log.Printf("unselect %s failed\n", param)
-		} else {
-			log.Printf("unselect %s success\n", param)
-		}
-	}
-	for index, s := range pings {
-		if index > 5 {
-			break
-		}
-		param := fmt.Sprintf(`{"id":%d,"_type":"%s","sub":%d,"outbound":"proxy"}`, s.id, s._type, s.sub)
-		res, err = request("connection", "post", strings.NewReader(param))
-		if err != nil || res.isFailed() {
-			log.Printf("select %s failed\n", param)
-		} else {
-			log.Printf("select %s success\n", param)
-
-		}
-	}
-	res, err = request("v2ray", "post", nil)
-	if err != nil || res.isFailed() {
-		log.Printf("start v2ray failed.%s\n", res.Data)
-	} else {
-		log.Printf("start v2ray success.%s\n", res.Data)
-	}
-}
-
 func isRunning() bool {
 	res, err := request("touch", "GET", nil)
 	if err != nil || res.isFailed() {
+		log.Println("RunningCheckErr:", err)
 		return false
 	}
 	data := res.Data
