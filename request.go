@@ -46,6 +46,9 @@ func request(action, method string, body io.Reader) (*Response, error) {
 	}
 	defer res.Body.Close()
 	bytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
 	response := &Response{}
 	err = json.Unmarshal(bytes, response)
 	return response, err
