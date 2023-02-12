@@ -59,7 +59,11 @@ func login() error {
 func request(action, method string, body io.Reader) (*Response, error) {
 	url := serverBase + action
 	method = strings.ToUpper(method)
-	log.Printf("[%s]%s", method, url)
+	if strings.Contains(url, "/api/touch") {
+		fmt.Printf(".")
+	} else {
+		log.Printf("[%s]%s", method, url)
+	}
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
