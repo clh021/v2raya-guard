@@ -60,9 +60,9 @@ func request(action, method string, body io.Reader) (*Response, error) {
 	url := serverBase + action
 	method = strings.ToUpper(method)
 	if strings.Contains(url, "/api/touch") {
-		fmt.Printf(".")
+		fmt.Print(".")
 	} else {
-		log.Printf("[%s]%s", method, url)
+		log.Printf("[%s]%s |DATA: %+v", method, url, body)
 	}
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
@@ -91,6 +91,7 @@ func request(action, method string, body io.Reader) (*Response, error) {
 	}
 	response := &Response{}
 	err = json.Unmarshal(bytes, response)
+	log.Printf("Response: %s", response.Data)
 	return response, err
 }
 
