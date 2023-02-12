@@ -91,7 +91,9 @@ func request(action, method string, body io.Reader) (*Response, error) {
 	}
 	response := &Response{}
 	err = json.Unmarshal(bytes, response)
-	log.Printf("Response: %s", response.Data)
+	// if !strings.Contains(url, "/api/touch") {
+	log.Printf("Response: %s", string(bytes))
+	// }
 	return response, err
 }
 
