@@ -1,5 +1,5 @@
 # docker build -t leehom/v2raya-guard:latest .
-docker run -d --name v2raya-guard -v /etc/localtime:/etc/localtime:ro -e username="root" -e password="l" -e serverbaseurl="http://192.168.1.2:2017/api/" -e cronExp="0 3,12,21 * * *"  leehom/v2raya-guard
+# docker run -d --name v2raya-guard -v /etc/localtime:/etc/localtime:ro -e username="root" -e password="l" -e serverbaseurl="http://192.168.1.2:2017/api/" -e cronExp="0 3,12,21 * * *"  leehom/v2raya-guard
 
 # -- Stage 1 -- #
 # Compile the app.
