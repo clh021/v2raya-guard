@@ -59,11 +59,11 @@ func login() error {
 func request(action, method string, body io.Reader) (*Response, error) {
 	url := serverBase + action
 	method = strings.ToUpper(method)
-	if strings.Contains(url, "/api/touch") {
-		fmt.Print(".")
-	} else {
-		log.Printf("[%s]%s |DATA: %+v", method, url, body)
-	}
+	// if strings.Contains(url, "/api/touch") {
+	// 	fmt.Print(".")
+	// } else {
+	// 	log.Printf("[%s]%s |DATA: %+v", method, url, body)
+	// }
 	req, err := http.NewRequest(method, url, body)
 	if err != nil {
 		return nil, err
@@ -92,6 +92,7 @@ func request(action, method string, body io.Reader) (*Response, error) {
 	response := &Response{}
 	err = json.Unmarshal(bytes, response)
 	// if !strings.Contains(url, "/api/touch") {
+	log.Printf("[%s]%s |DATA: %+v", method, url, body)
 	log.Printf("Response: %s", string(bytes))
 	// }
 	return response, err
